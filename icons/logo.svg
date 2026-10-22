@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+<!-- Altitude app icon: ribbon "A" peak with a rising sun/breath orb. Source for icons/*.png (tools/render_icons.mjs). -->
+<defs>
+<linearGradient id="l" x1="260" y1="736" x2="512" y2="318" gradientUnits="userSpaceOnUse">
+<stop offset="0" stop-color="#12C8A5"/>
+<stop offset="1" stop-color="#2D7BF4"/>
+</linearGradient>
+<linearGradient id="r" x1="512" y1="318" x2="764" y2="736" gradientUnits="userSpaceOnUse">
+<stop offset="0" stop-color="#FF9C3A"/>
+<stop offset="1" stop-color="#FF3D7E"/>
+</linearGradient>
+<linearGradient id="s" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#FFD54A"/>
+<stop offset="1" stop-color="#FFA31A"/>
+</linearGradient>
+<mask id="lm" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+<rect width="1024" height="1024" fill="#000"/>
+<line x1="260" y1="736" x2="512" y2="318" stroke="#fff" stroke-width="142" stroke-linecap="round"/>
+</mask>
+<filter id="blur" filterUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+<feGaussianBlur stdDeviation="18.46"/>
+</filter>
+</defs>
+<rect width="1024" height="1024" fill="#fff"/>
+<line x1="260" y1="736" x2="512" y2="318" stroke="url(#l)" stroke-width="142" stroke-linecap="round"/>
+<g mask="url(#lm)">
+<line x1="504.9" y1="335.04" x2="764" y2="736" stroke="#061A52" stroke-opacity="0.45" stroke-width="142" stroke-linecap="round" filter="url(#blur)"/>
+</g>
+<line x1="512" y1="318" x2="764" y2="736" stroke="url(#r)" stroke-width="142" stroke-linecap="round"/>
+<circle cx="512" cy="648" r="68" fill="url(#s)"/>
+</svg>

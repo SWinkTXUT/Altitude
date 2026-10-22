@@ -27,7 +27,8 @@ Daily walking breath-hold training for VO₂ max, as an iPhone web app (Add to H
 | `js/app.js` | UI, storage (localStorage), player, progress |
 | `audio/voice/` | Pre-generated voice cues (Kokoro TTS, voice `af_heart`) |
 | `tools/gen_voice.py` | Regenerates the voice cues |
-| `tools/make_icons.py` | Draws the app icons |
+| `icons/logo.svg` | App icon source (ribbon "A" peak + sun/breath orb) |
+| `tools/render_icons.mjs` | Renders the icon PNGs from `logo.svg` |
 
 No build step: it's static files. To run locally: `python3 -m http.server` and open
 `http://localhost:8000`.

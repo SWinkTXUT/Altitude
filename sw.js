@@ -1,8 +1,8 @@
 // Offline support: cache the app shell and all voice clips on install.
-const VERSION = 'altitude-v1';
+const VERSION = 'altitude-v2';
 const SHELL = [
   './', 'index.html', 'css/style.css', 'js/app.js', 'js/program.js', 'js/script.js', 'js/audio.js',
-  'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png',
+  'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/logo.svg',
   'audio/voice/manifest.json',
 ];
 
