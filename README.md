@@ -25,6 +25,8 @@ Daily walking breath-hold training for VO₂ max, as an iPhone web app (Add to H
 | `js/script.js` | Builds each session's timeline: voice cues, visual phases, music energy |
 | `js/audio.js` | Synthesizes the music and mixes music + voice into one WAV |
 | `js/app.js` | UI, storage (localStorage), player, progress |
+| `js/art.js` | Illustrations (Sunny the mascot, scenery) and icons |
+| `fonts/` | Nunito (bundled for offline use, SIL Open Font License) |
 | `audio/voice/` | Pre-generated voice cues (Kokoro TTS, voice `af_heart`) |
 | `tools/gen_voice.py` | Regenerates the voice cues |
 | `icons/logo.svg` | App icon source (ribbon "A" peak + sun/breath orb) |
