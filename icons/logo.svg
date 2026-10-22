@@ -1,31 +1,58 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-<!-- Altitude app icon: ribbon "A" peak with a rising sun/breath orb. Source for icons/*.png (tools/render_icons.mjs). -->
+<!-- Altitude app icon: a lit summit at dusk, haloed by the breath glow. Source for icons/*.png (tools/render_icons.mjs). -->
 <defs>
-<linearGradient id="l" x1="260" y1="736" x2="512" y2="318" gradientUnits="userSpaceOnUse">
-<stop offset="0" stop-color="#12C8A5"/>
-<stop offset="1" stop-color="#2D7BF4"/>
+  <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#15143D"/>
+<stop offset=".6" stop-color="#4E3A80"/>
+<stop offset="1" stop-color="#E8939A"/>
 </linearGradient>
-<linearGradient id="r" x1="512" y1="318" x2="764" y2="736" gradientUnits="userSpaceOnUse">
-<stop offset="0" stop-color="#FF9C3A"/>
-<stop offset="1" stop-color="#FF3D7E"/>
+  <radialGradient id="glow" cx=".5" cy=".5" r=".5">
+<stop offset="0" stop-color="#FFE2CF" stop-opacity=".9"/>
+<stop offset=".3" stop-color="#FFE2CF" stop-opacity=".42"/>
+<stop offset="1" stop-color="#FFE2CF" stop-opacity="0"/>
+</radialGradient>
+  <linearGradient id="lit" gradientUnits="userSpaceOnUse" x1="0" y1="236" x2="0" y2="840">
+<stop offset="0" stop-color="#FFFFFF"/>
+<stop offset=".16" stop-color="#F4DDE8"/>
+<stop offset=".55" stop-color="#B79ACB"/>
+<stop offset="1" stop-color="#B79ACB"/>
 </linearGradient>
-<linearGradient id="s" x1="0" y1="0" x2="0" y2="1">
-<stop offset="0" stop-color="#FFD54A"/>
-<stop offset="1" stop-color="#FFA31A"/>
+  <linearGradient id="shd" gradientUnits="userSpaceOnUse" x1="0" y1="236" x2="0" y2="840">
+<stop offset="0" stop-color="#F4DDE8"/>
+<stop offset=".22" stop-color="#7E5F9F"/>
+<stop offset="1" stop-color="#7E5F9F"/>
 </linearGradient>
-<mask id="lm" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
-<rect width="1024" height="1024" fill="#000"/>
-<line x1="260" y1="736" x2="512" y2="318" stroke="#fff" stroke-width="142" stroke-linecap="round"/>
-</mask>
-<filter id="blur" filterUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
-<feGaussianBlur stdDeviation="18.46"/>
-</filter>
+  <linearGradient id="mid" gradientUnits="userSpaceOnUse" x1="0" y1="300" x2="0" y2="840">
+<stop offset="0" stop-color="#7E5F9F" stop-opacity="0"/>
+<stop offset=".35" stop-color="#7E5F9F" stop-opacity=".22"/>
+<stop offset="1" stop-color="#7E5F9F" stop-opacity=".3"/>
+</linearGradient>
+  <linearGradient id="haze" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#E7A8B6" stop-opacity="0"/>
+<stop offset=".8" stop-color="#E7A8B6" stop-opacity=".45"/>
+<stop offset="1" stop-color="#E7A8B6" stop-opacity=".2"/>
+</linearGradient>
 </defs>
-<rect width="1024" height="1024" fill="#fff"/>
-<line x1="260" y1="736" x2="512" y2="318" stroke="url(#l)" stroke-width="142" stroke-linecap="round"/>
-<g mask="url(#lm)">
-<line x1="504.9" y1="335.04" x2="764" y2="736" stroke="#061A52" stroke-opacity="0.45" stroke-width="142" stroke-linecap="round" filter="url(#blur)"/>
-</g>
-<line x1="512" y1="318" x2="764" y2="736" stroke="url(#r)" stroke-width="142" stroke-linecap="round"/>
-<circle cx="512" cy="648" r="68" fill="url(#s)"/>
+<rect width="1024" height="1024" fill="url(#sky)"/>
+<circle cx="270" cy="240" r="3.1" fill="#fff" opacity="0.49"/>
+<circle cx="628" cy="73" r="2.8" fill="#fff" opacity="0.59"/>
+<circle cx="62" cy="343" r="3.3" fill="#fff" opacity="0.75"/>
+<circle cx="290" cy="132" r="3.5" fill="#fff" opacity="0.76"/>
+<circle cx="970" cy="215" r="3.9" fill="#fff" opacity="0.80"/>
+<circle cx="823" cy="217" r="3.5" fill="#fff" opacity="0.38"/>
+<circle cx="640" cy="103" r="3.9" fill="#fff" opacity="0.78"/>
+<circle cx="670" cy="72" r="4.0" fill="#fff" opacity="0.58"/>
+<circle cx="328" cy="61" r="3.6" fill="#fff" opacity="0.41"/>
+<circle cx="850" cy="215" r="3.8" fill="#fff" opacity="0.59"/>
+<circle cx="862" cy="84" r="2.6" fill="#fff" opacity="0.33"/>
+<circle cx="176" cy="126" r="3.9" fill="#fff" opacity="0.79"/>
+<circle cx="942" cy="203" r="2.2" fill="#fff" opacity="0.70"/>
+<circle cx="629" cy="155" r="2.9" fill="#fff" opacity="0.38"/>
+<circle cx="540" cy="360" r="330" fill="url(#glow)"/>
+<path d="M-20 800 L90 690 L170 650 L240 600 L300 640 L360 610 L420 680 L480 720 L560 700 L660 620 L740 560 L820 600 L900 540 L960 580 L1044 560 L1044 1024 L-20 1024Z" fill="#6B5490"/>
+<path d="M70 840 L210 690 L270 668 L330 600 L380 560 L430 470 L470 420 L505 350 L540 300 L568 236 L600 290 L628 318 L660 380 L705 430 L745 500 L790 540 L840 620 L900 690 L980 840 Z" fill="url(#lit)"/>
+<path d="M505 350 L540 300 L548 352 L522 420 L500 500 L470 580 L430 680 L360 780 L300 840 L170 840 L300 720 L360 640 L410 560 L440 490 L470 420 Z" fill="url(#mid)"/>
+<path d="M568 236 L585 300 L572 350 L606 410 L594 470 L640 540 L632 600 L680 680 L700 760 L720 840 L980 840 L900 690 L840 620 L790 540 L745 500 L705 430 L660 380 L628 318 L600 290 Z" fill="url(#shd)"/>
+<rect x="0" y="620" width="1024" height="260" fill="url(#haze)"/>
+<path d="M-20 1024 L-20 850 L110 815 L210 842 L330 795 L450 850 L590 820 L700 858 L830 806 L930 838 L1044 818 L1044 1024Z" fill="#100E2B"/>
 </svg>
