@@ -44,19 +44,19 @@ P = {
     "enc_3": "You've got this.",
     "enc_4": "Strong and steady.",
     "get_ready": "Get ready for the next one.",
-    "baseline_explain": "In a moment, you'll hold your breath for as long as is comfortable while you walk. "
-                        "I'll call out the time every five seconds. When you feel a strong urge to breathe, "
-                        "release the hold and tap your earbuds once, or just remember the last number you heard.",
-    "baseline_cap": "That's an incredible hold. Breathe now.",
-    "baseline_done": "Good. Breathe normally, and remember that last number.",
+    "baseline_explain": "In a moment, you'll breathe out gently, and hold for as long as is comfortable, up to twenty seconds, "
+                        "while you keep walking. I'll count the seconds. When you need to breathe, tap stop on your screen, "
+                        "or tap your earbuds, and breathe.",
+    "test_cap": "Twenty seconds. Great hold. Breathe now.",
+    "baseline_done": "Good. Breathe normally, nice and easy.",
     "last_done": "That's the last hold. Great work today.",
     "cooldown": "Keep walking easy, breathing through your nose. Let your heart rate come down.",
     "complete": "Session complete. You're one step higher. See you tomorrow.",
-    "complete_test": "Session complete. Take out your phone, and enter the last number you heard.",
+    "complete_test": "Session complete. Take out your phone to check your result.",
 }
 for i in range(1, 13):
     P[f"round_{i}"] = f"Round {words(i)}."
-for n in range(1, 11):
+for n in range(1, 21):
     P[f"n_{n}"] = words(n).capitalize() + "."
 for n in range(5, 181, 5):
     P[f"count_{n}"] = words(n).capitalize() + "."

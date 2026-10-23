@@ -15,7 +15,8 @@ export function rng(seed) {
   };
 }
 
-const TEST_MAX = 120;
+// Longest test hold. Most people release a walking exhale-hold well before this.
+export const TEST_MAX = 20;
 const MUSIC_LEAD = 2.5;
 
 class Builder {
@@ -172,13 +173,14 @@ function buildTest(clips, plan) {
   prepBreath(b);
   const hs = b.t;
   b.at(hs, 'hold_go');
-  for (let s = 5; s <= TEST_MAX; s += 5) b.at(hs + s, `count_${s}`);
-  const he = hs + TEST_MAX + 1.6;
-  b.at(he, 'baseline_cap');
-  b.phase('test', hs, he + clips.baseline_cap, { label: 'Hold as long as comfortable' });
+  // Count every second (after the "hold" cue finishes) so the last number heard is exact.
+  for (let s = 3; s < TEST_MAX; s++) b.at(hs + s, `n_${s}`);
+  const he = hs + TEST_MAX;
+  b.at(he, 'test_cap');
+  b.phase('test', hs, he + clips.test_cap, { label: 'Hold as long as comfortable' });
   b.holds.push({ start: hs, end: he });
-  b.t = he + clips.baseline_cap + 2;
-  // After an earbud tap the player jumps here.
+  b.t = he + clips.test_cap + 1.5;
+  // Tapping stop (on screen or an earbud) jumps here.
   const post = b.t;
   b.say('baseline_done', 1.5);
   b.phase('recover', post, b.t, { label: 'Recover' });

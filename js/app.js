@@ -1,5 +1,5 @@
 import { PRESETS, KIND_LABEL, sessionCount, sessionKind, trainingParams, latestTest, adjustDifficulty } from './program.js';
-import { buildSession } from './script.js';
+import { buildSession, TEST_MAX } from './script.js';
 import { renderSession } from './audio.js';
 import { landscape, timeMood, icon } from './art.js';
 
@@ -592,7 +592,7 @@ function readyScreen() {
         ${li('headphones', 'Put in your earbuds')}
         ${li('walk', 'Tap begin and start walking')}
         ${li('phone', 'Pocket your phone. The voice will guide you.')}
-        ${s.test ? li('flag', 'Tap an earbud once when you release the test hold') : ''}
+        ${s.test ? li('flag', `Hold up to ${TEST_MAX} seconds. When you need to breathe, tap Stop on screen or tap an earbud.`) : ''}
       </ul></div>
     </div>
     <div class="foot rise d3"><button class="pill" id="begin">${icon('play', 18)} Begin · ${fmtTime(s.duration)}</button></div>`);
@@ -618,6 +618,7 @@ function begin() {
       </div>
       <div class="pcount" id="count"></div>
       <div class="psub" id="psub"></div>
+      <button class="pill stop" id="stop" hidden>Stop &amp; breathe</button>
     </div>
     <div class="foot ctrl">
       <div class="pbar"><div class="track"><div class="fill" id="pb"></div></div><div class="times"><span id="tcur">0:00</span><span id="trem">-${fmtTime(s.duration)}</span></div></div>
@@ -625,6 +626,8 @@ function begin() {
     </div>`, ['dusk', 'breathe', 'hold'], 'dusk');
   overlay.querySelector('#pp').onclick = () => (audio.paused ? audio.play() : audio.pause());
   overlay.querySelector('#end').onclick = endEarly;
+  overlay.querySelector('#stop').onclick = stopTest;
+  overlay.querySelector('.stage').onclick = stopTest;
   cancelAnimationFrame(raf);
   raf = requestAnimationFrame(tick);
 }
@@ -639,16 +642,8 @@ function setupMediaSession() {
     album: 'Altitude breath training',
     artwork: [{ src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' }],
   });
-  const tap = () => {
-    const t = audio.currentTime;
-    if (s.test && t >= s.test.holdStart + 2 && t < s.test.resume && current.testTap == null) {
-      current.testTap = Math.min(180, Math.round(t - s.test.holdStart - 0.5));
-      audio.currentTime = s.test.resume;
-      audio.play();
-      return true;
-    }
-    return false;
-  };
+  // Earbud taps arrive a moment after the release, so take half a second off.
+  const tap = () => stopTest(0.5);
   const set = (a, fn) => { try { ms.setActionHandler(a, fn); } catch {} };
   set('play', () => audio.play());
   set('pause', () => { if (!tap()) audio.pause(); });
@@ -657,6 +652,23 @@ function setupMediaSession() {
   set('seekbackward', null);
   set('seekforward', null);
   set('seekto', null);
+}
+
+// Ends the test hold: records the time and skips ahead to recovery.
+function testHoldActive() {
+  const s = current?.session;
+  const t = audio.currentTime;
+  return !!(s?.test && current.testTap == null && t >= s.test.holdStart + 1 && t < s.test.holdEnd + 0.5);
+}
+
+function stopTest(lag = 0) {
+  if (!testHoldActive()) return false;
+  const s = current.session;
+  const held = audio.currentTime - s.test.holdStart - (typeof lag === 'number' ? lag : 0);
+  current.testTap = Math.max(1, Math.min(TEST_MAX, Math.round(held)));
+  audio.currentTime = s.test.resume;
+  audio.play();
+  return true;
 }
 
 function phaseAt(phases, t) {
@@ -686,13 +698,15 @@ function tick() {
       count = `${Math.max(0, Math.ceil(ph.end - t))}`; sub = 'Keep walking. Stay loose.';
       break;
     case 'test':
-      b = 0.05 + 0.02 * Math.sin(t * 2.5); ring = ((t - ph.start) % 60) / 60; bg = 'hold'; label = 'Hold';
-      count = `${current.testTap != null ? current.testTap : Math.floor(t - ph.start)}<small>s</small>`;
-      sub = 'Tap an earbud when you release';
+      b = 0.05 + 0.02 * Math.sin(t * 2.5); ring = Math.min(1, (t - ph.start) / TEST_MAX); bg = 'hold'; label = 'Hold';
+      count = `${Math.min(TEST_MAX, Math.floor(t - ph.start))}<small>s</small>`;
+      sub = t - ph.start < TEST_MAX ? `Up to ${TEST_MAX} seconds` : 'Breathe now';
       break;
     case 'recover':
       b = 0.45 + 0.18 * Math.sin((2 * Math.PI * t) / 6); label = 'Recover';
-      if (ph.next) { count = `${Math.max(0, Math.ceil(ph.next - t))}`; sub = 'until the next hold'; } else sub = 'Easy breaths through your nose';
+      if (ph.next) { count = `${Math.max(0, Math.ceil(ph.next - t))}`; sub = 'until the next hold'; }
+      else if (s.test) { count = `${current.testTap ?? TEST_MAX}<small>s</small>`; sub = 'Hold recorded. Easy breaths.'; }
+      else sub = 'Easy breaths through your nose';
       break;
     case 'announce':
       b = 0.45 + 0.12 * Math.sin((2 * Math.PI * t) / 6); count = `${ph.hold}<small>s</small>`; sub = 'Next hold';
@@ -716,6 +730,8 @@ function tick() {
   if ($('count').innerHTML !== count) $('count').innerHTML = count;
   if ($('plabel').textContent !== label) $('plabel').textContent = label;
   $('psub').textContent = sub;
+  const showStop = testHoldActive();
+  if ($('stop').hidden === showStop) $('stop').hidden = !showStop;
   $('pb').style.width = `${Math.min(100, (t / s.duration) * 100)}%`;
   $('tcur').textContent = fmtTime(t);
   $('trem').textContent = '-' + fmtTime(s.duration - t);
@@ -837,11 +853,11 @@ function rateScreen(rec) {
 }
 
 function testResult(rec) {
-  let v = rec.testTap ?? (latestTest(state.program.results) || 30);
+  let v = rec.testTap ?? TEST_MAX;
   flow(`<div class="center">
       <div class="eyebrow rise">${KIND_LABEL[rec.kind]}</div>
       <h1 class="rise d1" style="margin-top:12px">How long did you hold?</h1>
-      <p class="rise d2">${rec.testTap != null ? `We caught your earbud tap at ${rec.testTap} seconds. Adjust it if needed.` : 'Enter the last number you heard before you breathed.'}</p>
+      <p class="rise d2">${rec.testTap != null ? `You stopped at ${rec.testTap} seconds. Adjust it if needed.` : `No stop was recorded, so this is set to the full ${TEST_MAX} seconds. Adjust it if you breathed sooner.`}</p>
       <div class="stepper rise d3">
         <button data-d="-5" aria-label="Minus 5">−5</button><button data-d="-1" aria-label="Minus 1">−1</button>
         <output id="val" class="num">${v}<small>s</small></output>
@@ -850,7 +866,7 @@ function testResult(rec) {
     </div>
     <div class="foot rise d4"><button class="pill" id="saveT">Save result</button></div>`, ['hold'], 'hold', 31);
   overlay.querySelectorAll('[data-d]').forEach((b) => (b.onclick = () => {
-    v = Math.max(5, Math.min(180, v + Number(b.dataset.d)));
+    v = Math.max(1, Math.min(TEST_MAX, v + Number(b.dataset.d)));
     overlay.querySelector('#val').innerHTML = `${v}<small>s</small>`;
   }));
   overlay.querySelector('#saveT').onclick = () => {

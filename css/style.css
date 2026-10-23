@@ -105,6 +105,7 @@ b { font-weight: 600; color: var(--text); }
 .pill.text { background: none; color: var(--text2); min-height: 48px; }
 .pill.warn { background: rgba(255, 120, 140, 0.16); color: #FFB3C0; border: 1px solid rgba(255, 140, 160, 0.25); }
 .pill + .pill { margin-top: 10px; }
+.pill.stop { width: auto; min-width: 230px; margin-top: 26px; animation: fadein 0.4s ease both; }
 
 /* ---------- Today card ---------- */
 
