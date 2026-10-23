@@ -1,6 +1,7 @@
 import { PRESETS, KIND_LABEL, sessionCount, sessionKind, trainingParams, latestTest, adjustDifficulty } from './program.js';
 import { buildSession, testMax } from './script.js';
-import { renderSession } from './audio.js';
+import { renderSession, renderRest } from './audio.js';
+import { buildRest, REST_LENGTHS } from './rest.js';
 import { landscape, timeMood, icon } from './art.js';
 
 const KEY = 'altitude.v1';
@@ -18,6 +19,7 @@ const defaults = () => ({
   archive: [],
   settings: { music: 0.8, voice: 1 },
   pending: null,
+  rest: [],
 });
 
 function load() {
@@ -166,11 +168,13 @@ function view() {
   setTabs(true);
   if (tab === 'progress') return progress();
   if (tab === 'settings') return settings();
+  if (tab === 'rest') return restTab();
   return home();
 }
 
 tabs.innerHTML = [
   ['today', 'peak', 'Today'],
+  ['rest', 'moon', 'Rest'],
   ['progress', 'chart', 'Progress'],
   ['settings', 'settings', 'Settings'],
 ].map(([t, ic, l]) => `<button data-tab="${t}" class="tab" aria-label="${l}">${icon(ic, 22)}<span>${l}</span></button>`).join('');
@@ -392,7 +396,7 @@ function progress() {
   const base = res.find((r) => r.testSeconds)?.testSeconds;
   const last = latestTest(res);
   const gain = base && last && last !== base ? Math.round(((last - base) / base) * 100) : null;
-  const mins = Math.round(all.reduce((a, r) => a + (r.duration || 0), 0) / 60);
+  const mins = Math.round([...all, ...state.rest].reduce((a, r) => a + (r.duration || 0), 0) / 60);
   const holds = all.reduce((a, r) => a + (r.rounds || 0), 0);
   const stat = (ic, v, unit, l, d) => `<div class="glass stat rise ${d}">${icon(ic, 20)}<div class="v num">${v}${unit ? `<small>${unit}</small>` : ''}</div><div class="l">${l}</div></div>`;
 
@@ -471,10 +475,15 @@ function calendar() {
 }
 
 function history() {
-  const res = [...state.program.results].reverse();
+  // Climb sessions and deep-rest sessions, newest day first.
+  const res = [...state.program.results.map((r, k) => ({ ...r, o: k })), ...state.rest.map((r, k) => ({ ...r, kind: 'rest', o: 1000 + k }))]
+    .sort((a, b) => (a.date === b.date ? b.o - a.o : a.date < b.date ? 1 : -1));
   if (!res.length) return '<p style="margin:0">Your sessions will appear here.</p>';
   const rate = { easy: 'Felt easy', right: 'Just right', hard: 'Felt hard' };
-  return `<ul class="hist">${res.map((r) => `<li>${icon(KIND_ICON[r.kind], 20)}
+  const day = (r) => parseDay(r.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  return `<ul class="hist">${res.map((r) => r.kind === 'rest' ? `<li>${icon('moon', 20)}
+      <div class="main"><b>Deep rest</b><span>${day(r)}</span></div>
+      <div class="val">${r.minutes}<span>minutes</span></div></li>` : `<li>${icon(KIND_ICON[r.kind], 20)}
       <div class="main"><b>Day ${r.i + 1} · ${KIND_LABEL[r.kind]}</b><span>${parseDay(r.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}${r.rating ? ' · ' + rate[r.rating] : ''}</span></div>
       <div class="val">${r.testSeconds ? `${r.testSeconds}s<span>test hold</span>` : `${r.target}s<span>${r.rounds} holds</span>`}</div></li>`).join('')}</ul>`;
 }
@@ -543,6 +552,7 @@ const RING_C = 2 * Math.PI * 48;
 // Full-screen flow over its own landscape; moods crossfade during the session.
 function flow(inner, moods = ['dusk'], active = moods[0], seed = 23) {
   overlay.hidden = false;
+  overlay.classList.remove('dim');
   document.body.style.overflow = 'hidden';
   lastBg = active;
   overlay.innerHTML = `<div class="backdrop deep">${moods.map((m) => `<div class="layer${m === active ? ' on' : ''}" data-m="${m}">${scene(m, seed)}</div>`).join('')}<div class="shade"></div></div>${inner}`;
@@ -637,8 +647,8 @@ function setupMediaSession() {
   const s = current.session;
   const ms = navigator.mediaSession;
   ms.metadata = new MediaMetadata({
-    title: `Altitude · Day ${current.i + 1}`,
-    artist: KIND_LABEL[s.kind],
+    title: current.rest ? 'Altitude · Deep rest' : `Altitude · Day ${current.i + 1}`,
+    artist: current.rest ? `${s.minutes} minutes` : KIND_LABEL[s.kind],
     album: 'Altitude breath training',
     artwork: [{ src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' }],
   });
@@ -684,6 +694,7 @@ const ease = (k) => 0.5 - 0.5 * Math.cos(Math.PI * Math.min(1, Math.max(0, k)));
 
 function tick() {
   if (!current || overlay.hidden) return;
+  if (current.rest) return restTick();
   const s = current.session;
   const t = audio.currentTime || 0;
   const ph = phaseAt(s.phases, t) || { type: 'walk', label: t > s.duration - 8 ? 'Complete' : 'Walk', start: t, end: t + 1 };
@@ -750,7 +761,8 @@ function tick() {
 }
 
 audio.addEventListener('timeupdate', () => {
-  if (!current || current.practice || !current.session) return;
+  if (current?.rest && audio.currentTime > current.session.duration - 12) logRest();
+  if (!current || current.practice || current.rest || !current.session) return;
   if (audio.currentTime > current.session.duration - 15 && !state.pending) {
     state.pending = pendingRecord();
     save();
@@ -758,7 +770,8 @@ audio.addEventListener('timeupdate', () => {
 });
 
 audio.addEventListener('ended', () => {
-  if (current && current.session) finishScreen();
+  if (current?.rest) restDone();
+  else if (current && current.session) finishScreen();
 });
 
 function pendingRecord() {
@@ -775,6 +788,7 @@ function pendingRecord() {
 }
 
 async function endEarly() {
+  if (current.rest) return endRest();
   const s = current.session;
   const nearlyDone = audio.currentTime > s.duration * 0.85 || (s.test && audio.currentTime > s.test.resume);
   if (nearlyDone && !current.practice) {
@@ -904,6 +918,186 @@ function closePlayer() {
   overlay.innerHTML = '';
   document.body.style.overflow = '';
   view();
+}
+
+// ---------- Deep rest (NSDR) ----------
+
+function restTab() {
+  setBackdrop('night', false, 0.6);
+  const sel = state.settings.restLen || 10;
+  const log = state.rest;
+  const last = log[log.length - 1];
+  const lastText = last
+    ? `${last.date === today() ? 'Today' : parseDay(last.date).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })} · ${last.minutes} min`
+    : 'not yet';
+  const totalMin = Math.round(log.reduce((a, r) => a + r.duration, 0) / 60);
+  app.innerHTML = `
+    <div class="top"><div class="wordmark">Altitude</div></div>
+    <div class="greet rise">
+      <div class="date">Non-sleep deep rest</div>
+      <h1>Deep rest</h1>
+      <p style="max-width:320px;margin-bottom:0">Lie down, close your eyes, and let a calm voice guide your body into deep recovery.</p>
+    </div>
+    <div style="height:max(16px, calc(100vh - 760px))"></div>
+    ${REST_LENGTHS.map((r, k) => `<button class="glass choice rest-len rise d${k + 1}${r.minutes === sel ? ' sel' : ''}" data-m="${r.minutes}">
+        ${icon('moon', 22)}
+        <div class="t"><b>${r.title}</b><span>${r.blurb}</span></div>
+        <div class="elev"><b class="num">${r.minutes}:00</b></div></button>`).join('')}
+    <button class="pill rise d4" id="rest" style="margin:6px 0 14px">${icon('play', 18)} Begin deep rest</button>
+    <div class="glass rise d4">
+      <div class="eyebrow">Your rest</div>
+      <div class="statrow" style="margin:16px 0 0">
+        <div style="text-align:left"><b class="num">${log.length}</b><span>Sessions</span></div>
+        <div style="padding-left:16px;text-align:left"><b class="num">${totalMin}</b><span>Minutes</span></div>
+      </div>
+      <p style="margin:14px 0 0;font-size:13px">Last session: ${lastText}</p>
+    </div>
+    <div class="glass rise d4">
+      <div class="eyebrow">About NSDR</div>
+      <p style="margin:10px 0 0">Non-sleep deep rest pairs slow breathing with a guided body scan to calm your nervous system while you stay awake. Use it for a midday reset or to recover after training. It’s separate from your climb and won’t change your plan.</p>
+    </div>`;
+  app.querySelectorAll('.rest-len').forEach((b) => (b.onclick = () => {
+    state.settings.restLen = Number(b.dataset.m);
+    save();
+    app.querySelectorAll('.rest-len').forEach((c) => c.classList.toggle('sel', c === b));
+  }));
+  app.querySelector('#rest').onclick = () => startRest(state.settings.restLen || 10);
+}
+
+function restFlow(inner, moods = ['night'], active, seed) {
+  flow(inner, moods, active, seed);
+  overlay.classList.toggle('dim', moods[0] === 'night');
+}
+
+async function startRest(minutes) {
+  const session = buildRest(clips, minutes);
+  current = { rest: true, session, url: null, logged: false };
+  restFlow(`
+    <div class="bar"><button class="x" id="cancel" aria-label="Cancel">${icon('close', 18)}</button></div>
+    <div class="center">
+      <div class="stage" style="width:180px"><div class="orb breathing"></div></div>
+      <h1 class="rise">Preparing your rest</h1>
+      <p class="rise d1">Mixing voice and ambient sound.</p>
+      <div class="loadline"><div id="lb"></div></div>
+    </div>`);
+  let cancelled = false;
+  overlay.querySelector('#cancel').onclick = () => { cancelled = true; closePlayer(); };
+  try {
+    const blob = await renderRest(session, clips, state.settings, (f) => {
+      const lb = overlay.querySelector('#lb');
+      if (lb) lb.style.width = `${Math.round(f * 100)}%`;
+    });
+    if (cancelled) return;
+    current.url = URL.createObjectURL(blob);
+    audio.src = current.url;
+    audio.load();
+    const li = (ic, t) => `<li>${icon(ic, 22)}<div><span style="color:var(--text);font-size:16px">${t}</span></div></li>`;
+    restFlow(`
+      <div class="bar"><button class="x" id="cancel" aria-label="Cancel">${icon('close', 18)}</button></div>
+      <div class="center">
+        <div class="eyebrow rise">Deep rest · ${minutes} minutes</div>
+        <h1 class="rise d1" style="margin-top:12px">Find a quiet place</h1>
+        <div class="glass steps rise d2"><ul class="list">
+          ${li('moon', 'Lie on your back, or recline in a chair')}
+          ${li('headphones', 'Use earbuds, or keep your phone close at a low volume')}
+          ${li('phone', 'Tap begin, set your phone down, and close your eyes')}
+        </ul></div>
+      </div>
+      <div class="foot rise d3"><button class="pill" id="begin">${icon('play', 18)} Begin · ${fmtTime(session.duration)}</button></div>`);
+    overlay.querySelector('#cancel').onclick = closePlayer;
+    overlay.querySelector('#begin').onclick = beginRest;
+  } catch (err) {
+    if (cancelled) return;
+    console.error(err);
+    restFlow(`<div class="center"><h1>Something went wrong</h1><p>${String(err.message || err)}</p></div>
+      <div class="foot"><button class="pill" id="close">Close</button></div>`);
+    overlay.querySelector('#close').onclick = closePlayer;
+  }
+}
+
+function beginRest() {
+  const s = current.session;
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch {}
+  audio.currentTime = 0;
+  audio.play().catch((e) => alert('Could not start audio: ' + e.message));
+  setupMediaSession();
+  restFlow(`
+    <div class="bar"><button class="x" id="end" aria-label="End session">${icon('close', 18)}</button><div class="eyebrow" style="flex:1;text-align:center;margin-right:56px">Deep rest</div></div>
+    <div class="center">
+      <div class="stage rest-stage">
+        <div class="halo h1" id="h1"></div><div class="halo h2" id="h2"></div>
+        <div class="orb" id="orb"></div>
+      </div>
+      <div class="plabel" id="plabel">Settle in</div>
+      <div class="psub" id="psub"></div>
+    </div>
+    <div class="foot ctrl">
+      <div class="pbar"><div class="track"><div class="fill" id="pb"></div></div><div class="times"><span id="tcur">0:00</span><span id="trem">-${fmtTime(s.duration)}</span></div></div>
+      <button class="pp" id="pp" aria-label="Pause">${icon('pause', 24)}</button>
+    </div>`);
+  overlay.querySelector('#pp').onclick = () => (audio.paused ? audio.play() : audio.pause());
+  overlay.querySelector('#end').onclick = endEarly;
+  cancelAnimationFrame(raf);
+  raf = requestAnimationFrame(tick);
+}
+
+function restTick() {
+  const s = current.session;
+  const t = audio.currentTime || 0;
+  const ph = phaseAt(s.phases, t) || { type: 'rest', label: 'Rest', start: t, end: t + 1 };
+  const k = (t - ph.start) / Math.max(0.01, ph.end - ph.start);
+  // A slow ten-second glow, following the guided breaths when there are any.
+  let b = 0.45 + 0.25 * Math.sin((2 * Math.PI * t) / 10);
+  if (ph.type === 'inhale') b = ease(k);
+  else if (ph.type === 'top') b = 1;
+  else if (ph.type === 'exhale') b = 1 - ease(k);
+  const sub = ph.type === 'scan' && ph.label !== 'Body scan' ? 'Body scan' : '';
+  const $ = (id) => overlay.querySelector('#' + id);
+  if (!$('orb')) return;
+  $('orb').style.transform = `scale(${(0.62 + 0.3 * b).toFixed(3)})`;
+  $('h1').style.transform = `scale(${(0.88 + 0.1 * b).toFixed(3)})`;
+  $('h2').style.transform = `scale(${(0.82 + 0.16 * b).toFixed(3)})`;
+  if ($('plabel').textContent !== ph.label) $('plabel').textContent = ph.label;
+  if ($('psub').textContent !== sub) $('psub').textContent = sub;
+  $('pb').style.width = `${Math.min(100, (t / s.duration) * 100)}%`;
+  $('tcur').textContent = fmtTime(t);
+  $('trem').textContent = '-' + fmtTime(s.duration - t);
+  const paused = audio.paused;
+  if ($('pp').dataset.p !== String(paused)) { $('pp').dataset.p = String(paused); $('pp').innerHTML = icon(paused ? 'play' : 'pause', 24); }
+  raf = requestAnimationFrame(tick);
+}
+
+function logRest() {
+  if (!current?.rest || current.logged) return;
+  current.logged = true;
+  const s = current.session;
+  state.rest.push({ date: today(), minutes: s.minutes, duration: Math.round(Math.min(audio.currentTime || s.duration, s.duration)) });
+  save();
+}
+
+function restDone() {
+  logRest();
+  cancelAnimationFrame(raf);
+  const m = current.session.minutes;
+  restFlow(`<div class="center">
+      <div class="eyebrow rise">Deep rest complete</div>
+      <h1 class="rise d1" style="margin-top:14px">Well rested</h1>
+      <p class="rise d2">${m} minutes of non-sleep deep rest. Take a moment before you get up.</p>
+    </div>
+    <div class="foot rise d3"><button class="pill" id="close">Done</button></div>`, ['dawn'], 'dawn', 31);
+  overlay.querySelector('#close').onclick = closePlayer;
+}
+
+async function endRest() {
+  const s = current.session;
+  if (audio.currentTime > s.duration * 0.8) {
+    if (await sheet({ title: 'Finish here?', text: 'You’re nearly done, so this rest will be logged.', ok: 'Finish', cancel: 'Keep resting' })) {
+      audio.pause();
+      restDone();
+    }
+    return;
+  }
+  if (await sheet({ title: 'End deep rest?', text: 'Sessions are logged once you reach the last few minutes.', ok: 'End session', cancel: 'Keep resting', tone: 'warn' })) closePlayer();
 }
 
 // ---------- Boot ----------

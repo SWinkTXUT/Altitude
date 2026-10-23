@@ -475,3 +475,107 @@ function wavBlob(pcm) {
   str(36, 'data'); v.setUint32(40, bytes, true);
   return new Blob([header, pcm.buffer], { type: 'audio/wav' });
 }
+
+// ---------- Deep rest (NSDR): warm ambient drone + voice ----------
+// Mixed block by block straight into 16-bit samples so a 15-minute track stays light on memory.
+
+const DRONE_CHORDS = [
+  [38, 45, 50, 54, 57, 64], // D major add9, open voicing
+  [35, 42, 50, 54, 57, 61], // B minor 7 add9
+  [31, 38, 50, 55, 59, 62], // G major 7
+  [33, 40, 49, 52, 57, 64], // A sus/add
+];
+const DRONE_LEN = 28;
+const DRONE_STEP = 21;
+
+async function makeDrone() {
+  return renderSlots(DRONE_CHORDS.length, DRONE_LEN, (ctx) => {
+    const rv = ctx.createConvolver();
+    rv.buffer = impulse(3.2);
+    const wet = ctx.createGain();
+    wet.gain.value = 0.5;
+    rv.connect(wet).connect(ctx.destination);
+    DRONE_CHORDS.forEach((notes, k) => {
+      const t = k * DRONE_LEN;
+      const f = ctx.createBiquadFilter();
+      f.type = 'lowpass';
+      f.frequency.value = 820;
+      f.Q.value = 0.3;
+      const a = ctx.createGain();
+      a.gain.setValueAtTime(0, t);
+      a.gain.linearRampToValueAtTime(1, t + 7);
+      a.gain.setValueAtTime(1, t + DRONE_LEN - 9);
+      a.gain.linearRampToValueAtTime(0, t + DRONE_LEN - 1.5);
+      f.connect(a);
+      a.connect(ctx.destination);
+      a.connect(rv);
+      notes.forEach((m, j) => {
+        for (const [type, det, lvl] of [['sine', 0, 0.05], ['triangle', 6, 0.022], ['triangle', -7, 0.018]]) {
+          const o = ctx.createOscillator();
+          o.type = type;
+          o.frequency.value = mtof(m);
+          o.detune.value = det;
+          const g = ctx.createGain();
+          g.gain.value = lvl * (j < 2 ? 1.1 : 0.8);
+          o.connect(g).connect(f);
+          o.start(t);
+          o.stop(t + DRONE_LEN);
+        }
+      });
+    });
+  });
+}
+
+export async function renderRest(session, durations, settings, onProgress = () => {}) {
+  onProgress(0.03);
+  const voice = await loadVoice(session.voice.map((v) => v.key));
+  onProgress(0.25);
+  const chords = await makeDrone();
+  onProgress(0.5);
+  await yieldFrame();
+
+  const dur = session.duration;
+  const total = Math.ceil(dur * SR);
+  const items = [];
+  for (let t = 0, k = 0; t < dur; t += DRONE_STEP, k++) items.push({ buf: chords[k % chords.length], at: Math.round(t * SR), gain: 1 });
+  const droneEnd = items.length;
+  for (const v of session.voice) items.push({ buf: voice[v.key], at: Math.round(v.t * SR), gain: 0.92 * settings.voice });
+
+  const duck = cursor(duckPoints(session, durations), 1);
+  const fade = cursor([{ t: 0, v: 0 }, { t: 6, v: 1 }, { t: Math.max(6, dur - 10), v: 1 }, { t: dur, v: 0 }], 1);
+  const level = 0.55 * settings.music;
+  const pcm = new Int16Array(total);
+  const block = SR;
+  const tmpD = new Float32Array(block);
+  const tmpV = new Float32Array(block);
+  const rel = 1 - Math.exp(-1 / (0.12 * SR));
+  let env = 1;
+
+  for (let b0 = 0; b0 < total; b0 += block) {
+    const n = Math.min(block, total - b0);
+    tmpD.fill(0);
+    tmpV.fill(0);
+    items.forEach((it, idx) => {
+      const s0 = Math.max(b0, it.at), s1 = Math.min(b0 + n, it.at + it.buf.length);
+      if (s1 <= s0) return;
+      const dst = idx < droneEnd ? tmpD : tmpV;
+      for (let s = s0; s < s1; s++) dst[s - b0] += it.buf[s - it.at] * it.gain;
+    });
+    for (let i = 0; i < n; i++) {
+      const t = (b0 + i) / SR;
+      const swell = 0.88 + 0.12 * Math.sin((2 * Math.PI * t) / 17);
+      let x = tmpD[i] * level * swell * fade(t) * (0.55 + 0.45 * duck(t)) + tmpV[i];
+      const a = Math.abs(x);
+      const target = a > LIMIT ? LIMIT / a : 1;
+      env = target < env ? target : env + (target - env) * rel;
+      x *= env;
+      pcm[b0 + i] = Math.max(-1, Math.min(1, x)) * 32767;
+    }
+    if ((b0 / block) % 30 === 0) {
+      onProgress(0.5 + 0.5 * (b0 / total));
+      await yieldFrame();
+    }
+  }
+  onProgress(1);
+  return wavBlob(pcm);
+}

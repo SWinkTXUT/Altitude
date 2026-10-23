@@ -58,6 +58,57 @@ P = {
     "complete": "Session complete. You're one step higher. See you tomorrow.",
     "complete_test": "Session complete. Take out your phone to check your result.",
 }
+# Non-sleep deep rest (NSDR) script, spoken slower and softer.
+REST_SPEED = 0.86
+REST = {
+    "rest_welcome": "Welcome to deep rest. Find a comfortable place to lie down on your back, or recline in a chair. "
+                    "Let your arms rest by your sides, palms facing up, and let your feet fall open.",
+    "rest_eyes": "When you're ready, gently close your eyes.",
+    "rest_sigh_intro": "We'll begin with a few deep sighs, to settle the body.",
+    "rest_sigh_in": "Breathe in deeply through your nose.",
+    "rest_sigh_top": "Now one more short sip of air.",
+    "rest_sigh_out": "And let it all go, slowly, through your mouth.",
+    "rest_sigh_again": "Once more.",
+    "rest_pace_intro": "Now let your breath slow down. Breathe in gently through your nose, "
+                       "and let each exhale be a little longer than the inhale.",
+    "rest_in": "Breathe in.",
+    "rest_out": "And slowly out.",
+    "rest_pace_own": "Keep this gentle rhythm on your own. Long, slow exhales.",
+    "rest_scan_intro": "Now we'll move our attention slowly through the body. There's nothing to change. "
+                       "Simply notice each area, and let it soften.",
+    "rest_scan_rfoot": "Bring your attention to your right foot. The toes, the sole, the heel. Let it soften.",
+    "rest_scan_rleg": "Move up through your right ankle, your calf, your knee, and your thigh. Let the whole leg grow heavy.",
+    "rest_scan_lfoot": "Now your left foot. The toes, the sole, the heel. Let it soften.",
+    "rest_scan_lleg": "Your left ankle, your calf, your knee, and your thigh. Let the whole leg grow heavy.",
+    "rest_scan_hips": "Notice your hips, and your lower back, resting into the ground.",
+    "rest_scan_belly": "Your belly, gently rising and falling with each breath.",
+    "rest_scan_chest": "Your chest. Your ribs, expanding softly, and letting go.",
+    "rest_scan_arms": "Your hands and fingers. Your forearms, your elbows, your upper arms. Let both arms be heavy and still.",
+    "rest_scan_shoulders": "Your shoulders. Let them melt down, away from your ears.",
+    "rest_scan_neck": "Your neck and throat. Soft and relaxed.",
+    "rest_scan_jaw": "Your jaw. Let your teeth part slightly, and your tongue rest.",
+    "rest_scan_face": "Your cheeks, your eyes, and the space between your eyebrows. Let your face be smooth and still.",
+    "rest_scan_head": "Your forehead, and the top of your head.",
+    "rest_scan_whole": "Now sense your whole body at once, from head to toe, resting completely.",
+    "rest_scan_legs_short": "Bring your attention to your feet, and your legs. Let them grow heavy, and sink into the ground.",
+    "rest_scan_torso_short": "Notice your hips, your belly, and your chest, rising and falling with each breath.",
+    "rest_scan_arms_short": "Your hands, your arms, and your shoulders. Let them soften, and let go.",
+    "rest_scan_face_short": "Your neck, your jaw, and your face. Smooth, soft, and still.",
+    "rest_rest_intro": "Now simply rest here. Heavy, warm, and still. If your mind wanders, that's okay. "
+                       "Gently come back to the feeling of your breath.",
+    "rest_rem_1": "Let your body be heavy.",
+    "rest_rem_2": "Notice the breath, slow and easy.",
+    "rest_rem_3": "Nothing to do. Just rest.",
+    "rest_rem_4": "If thoughts arise, let them drift by, like clouds.",
+    "rest_rem_5": "Soft face. Soft shoulders. Soft belly.",
+    "rest_return_1": "Now begin to bring your awareness back. Let your breath grow a little deeper.",
+    "rest_return_2": "Gently wiggle your fingers, and your toes.",
+    "rest_return_3": "Take one more deep breath in, and let it go.",
+    "rest_return_4": "When you're ready, slowly open your eyes. Notice how you feel. Calm, clear, and refreshed.",
+    "rest_complete": "Deep rest complete.",
+}
+P.update(REST)
+
 for i in range(1, 13):
     P[f"round_{i}"] = f"Round {words(i)}."
 for n in range(1, 41):
@@ -81,7 +132,8 @@ def main(model, voices, only=None):
     for key, text in P.items():
         if only and key not in only: continue
         mp3 = os.path.join(out, key + ".mp3")
-        s, sr = k.create(text, voice="af_heart", speed=0.95, lang="en-us")
+        speed = REST_SPEED if key.startswith("rest_") else 0.95
+        s, sr = k.create(text, voice="af_heart", speed=speed, lang="en-us")
         s = trim(np.asarray(s, dtype=np.float32), sr)
         s = s / max(1e-6, np.abs(s).max()) * 0.89
         with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:

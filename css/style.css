@@ -257,6 +257,15 @@ input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 
 .sheet p { margin-bottom: 22px; }
 @keyframes up { from { transform: translateY(100%); } }
 
+/* ---------- Deep rest ---------- */
+
+.rest-len { padding: 16px 20px; margin-bottom: 10px; }
+.rest-len > .ic { color: var(--glow); }
+.overlay.dim .backdrop .layer { filter: brightness(0.6) saturate(0.85); }
+.overlay.dim .orb { opacity: 0.55; }
+.overlay.dim .plabel { font-size: 22px; color: var(--text2); }
+.rest-stage { width: min(60vw, 240px); margin: 10px 0 30px; }
+
 /* ---------- Full-screen flows ---------- */
 
 .overlay {

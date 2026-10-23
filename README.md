@@ -10,6 +10,9 @@ Daily walking breath-hold training for VO₂ max, as an iPhone web app (Add to H
   music), so it keeps playing with the screen locked. Lock-screen / AirPods controls work.
 - **Tests:** one walking breath hold while the voice counts each second, up to 20 seconds on
   day 1 and up to 40 seconds on retests (so improvement past the baseline shows). Tap **Stop & breathe** on screen (or tap an earbud) to end it early and record the time.
+- **Deep rest (NSDR):** a separate Rest tab with 5, 10 or 15 minute non-sleep deep rest sessions
+  (sighs, slow long-exhale breathing, a body scan, quiet rest and a gentle return) over a warm
+  ambient drone. Logged in history and minutes, but separate from the climb and streak.
 
 ## Install on iPhone
 
@@ -24,6 +27,7 @@ Daily walking breath-hold training for VO₂ max, as an iPhone web app (Add to H
 | `js/program.js` | Progression rules (session kinds, hold targets, rounds, recovery) |
 | `js/script.js` | Builds each session's timeline: voice cues, visual phases, music energy |
 | `js/audio.js` | Synthesizes the music and mixes music + voice into one WAV |
+| `js/rest.js` | Deep rest (NSDR) script timing for 5/10/15 minute sessions |
 | `js/app.js` | UI, storage (localStorage), player, progress |
 | `js/art.js` | Generated mountain landscapes (time-of-day and session moods) and line icons |
 | `fonts/` | Inter (bundled for offline use, SIL Open Font License) |
