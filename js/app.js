@@ -1,5 +1,5 @@
 import { PRESETS, KIND_LABEL, sessionCount, sessionKind, trainingParams, latestTest, adjustDifficulty } from './program.js';
-import { buildSession, TEST_MAX } from './script.js';
+import { buildSession, testMax } from './script.js';
 import { renderSession } from './audio.js';
 import { landscape, timeMood, icon } from './art.js';
 
@@ -592,7 +592,7 @@ function readyScreen() {
         ${li('headphones', 'Put in your earbuds')}
         ${li('walk', 'Tap begin and start walking')}
         ${li('phone', 'Pocket your phone. The voice will guide you.')}
-        ${s.test ? li('flag', `Hold up to ${TEST_MAX} seconds. When you need to breathe, tap Stop on screen or tap an earbud.`) : ''}
+        ${s.test ? li('flag', `Hold up to ${s.test.max} seconds. When you need to breathe, tap Stop on screen or tap an earbud.`) : ''}
       </ul></div>
     </div>
     <div class="foot rise d3"><button class="pill" id="begin">${icon('play', 18)} Begin · ${fmtTime(s.duration)}</button></div>`);
@@ -665,7 +665,7 @@ function stopTest(lag = 0) {
   if (!testHoldActive()) return false;
   const s = current.session;
   const held = audio.currentTime - s.test.holdStart - (typeof lag === 'number' ? lag : 0);
-  current.testTap = Math.max(1, Math.min(TEST_MAX, Math.round(held)));
+  current.testTap = Math.max(1, Math.min(s.test.max, Math.round(held)));
   audio.currentTime = s.test.resume;
   audio.play();
   return true;
@@ -698,14 +698,14 @@ function tick() {
       count = `${Math.max(0, Math.ceil(ph.end - t))}`; sub = 'Keep walking. Stay loose.';
       break;
     case 'test':
-      b = 0.05 + 0.02 * Math.sin(t * 2.5); ring = Math.min(1, (t - ph.start) / TEST_MAX); bg = 'hold'; label = 'Hold';
-      count = `${Math.min(TEST_MAX, Math.floor(t - ph.start))}<small>s</small>`;
-      sub = t - ph.start < TEST_MAX ? `Up to ${TEST_MAX} seconds` : 'Breathe now';
+      b = 0.05 + 0.02 * Math.sin(t * 2.5); ring = Math.min(1, (t - ph.start) / s.test.max); bg = 'hold'; label = 'Hold';
+      count = `${Math.min(s.test.max, Math.floor(t - ph.start))}<small>s</small>`;
+      sub = t - ph.start < s.test.max ? `Up to ${s.test.max} seconds` : 'Breathe now';
       break;
     case 'recover':
       b = 0.45 + 0.18 * Math.sin((2 * Math.PI * t) / 6); label = 'Recover';
       if (ph.next) { count = `${Math.max(0, Math.ceil(ph.next - t))}`; sub = 'until the next hold'; }
-      else if (s.test) { count = `${current.testTap ?? TEST_MAX}<small>s</small>`; sub = 'Hold recorded. Easy breaths.'; }
+      else if (s.test) { count = `${current.testTap ?? s.test.max}<small>s</small>`; sub = 'Hold recorded. Easy breaths.'; }
       else sub = 'Easy breaths through your nose';
       break;
     case 'announce':
@@ -853,11 +853,12 @@ function rateScreen(rec) {
 }
 
 function testResult(rec) {
-  let v = rec.testTap ?? TEST_MAX;
+  const max = testMax(rec.kind);
+  let v = rec.testTap ?? max;
   flow(`<div class="center">
       <div class="eyebrow rise">${KIND_LABEL[rec.kind]}</div>
       <h1 class="rise d1" style="margin-top:12px">How long did you hold?</h1>
-      <p class="rise d2">${rec.testTap != null ? `You stopped at ${rec.testTap} seconds. Adjust it if needed.` : `No stop was recorded, so this is set to the full ${TEST_MAX} seconds. Adjust it if you breathed sooner.`}</p>
+      <p class="rise d2">${rec.testTap != null ? `You stopped at ${rec.testTap} seconds. Adjust it if needed.` : `No stop was recorded, so this is set to the full ${max} seconds. Adjust it if you breathed sooner.`}</p>
       <div class="stepper rise d3">
         <button data-d="-5" aria-label="Minus 5">−5</button><button data-d="-1" aria-label="Minus 1">−1</button>
         <output id="val" class="num">${v}<small>s</small></output>
@@ -866,7 +867,7 @@ function testResult(rec) {
     </div>
     <div class="foot rise d4"><button class="pill" id="saveT">Save result</button></div>`, ['hold'], 'hold', 31);
   overlay.querySelectorAll('[data-d]').forEach((b) => (b.onclick = () => {
-    v = Math.max(1, Math.min(TEST_MAX, v + Number(b.dataset.d)));
+    v = Math.max(1, Math.min(max, v + Number(b.dataset.d)));
     overlay.querySelector('#val').innerHTML = `${v}<small>s</small>`;
   }));
   overlay.querySelector('#saveT').onclick = () => {

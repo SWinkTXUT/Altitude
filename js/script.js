@@ -15,8 +15,9 @@ export function rng(seed) {
   };
 }
 
-// Longest test hold. Most people release a walking exhale-hold well before this.
-export const TEST_MAX = 20;
+// Longest test hold. Day 1 stops at 20 s (most people release a walking exhale-hold
+// before then); retests allow 40 s so improvement past the baseline can show.
+export const testMax = (kind) => (kind === 'retest' ? 40 : 20);
 const MUSIC_LEAD = 2.5;
 
 class Builder {
@@ -168,18 +169,20 @@ function buildTest(clips, plan) {
   warmup(b, plan.kind === 'baseline' ? 'welcome_baseline' : 'welcome_retest', true);
   b.level(2);
   const e0 = b.t;
-  b.say('baseline_explain', 2.0);
+  const max = testMax(plan.kind);
+  b.say(max === 20 ? 'baseline_explain' : 'retest_explain', 2.0);
   b.phase('walk', e0, b.t, { label: 'Get ready' });
   prepBreath(b);
   const hs = b.t;
   b.at(hs, 'hold_go');
   // Count every second (after the "hold" cue finishes) so the last number heard is exact.
-  for (let s = 3; s < TEST_MAX; s++) b.at(hs + s, `n_${s}`);
-  const he = hs + TEST_MAX;
-  b.at(he, 'test_cap');
-  b.phase('test', hs, he + clips.test_cap, { label: 'Hold as long as comfortable' });
+  for (let s = 3; s < max; s++) b.at(hs + s, `n_${s}`);
+  const he = hs + max;
+  const cap = max === 20 ? 'test_cap' : 'test_cap_40';
+  b.at(he, cap);
+  b.phase('test', hs, he + clips[cap], { label: 'Hold as long as comfortable' });
   b.holds.push({ start: hs, end: he });
-  b.t = he + clips.test_cap + 1.5;
+  b.t = he + clips[cap] + 1.5;
   // Tapping stop (on screen or an earbud) jumps here.
   const post = b.t;
   b.say('baseline_done', 1.5);
@@ -187,7 +190,7 @@ function buildTest(clips, plan) {
   b.level(1.5);
   cooldown(b, 'complete_test');
   const out = finish(b, plan, 1);
-  out.test = { holdStart: hs, holdEnd: he, resume: post };
+  out.test = { holdStart: hs, holdEnd: he, resume: post, max };
   return out;
 }
 

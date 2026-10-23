@@ -8,8 +8,8 @@ Daily walking breath-hold training for VO₂ max, as an iPhone web app (Add to H
   a week; retest at the end (and halfway for 8/12 weeks). Missed days just shift the end date.
 - **Pocket mode:** each session is mixed into one audio track (voice + upbeat generated
   music), so it keeps playing with the screen locked. Lock-screen / AirPods controls work.
-- **Baseline test:** one walking breath hold of up to 20 seconds while the voice counts each
-  second. Tap **Stop & breathe** on screen (or tap an earbud) to end it early and record the time.
+- **Tests:** one walking breath hold while the voice counts each second, up to 20 seconds on
+  day 1 and up to 40 seconds on retests (so improvement past the baseline shows). Tap **Stop & breathe** on screen (or tap an earbud) to end it early and record the time.
 
 ## Install on iPhone
 

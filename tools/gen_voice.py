@@ -47,7 +47,11 @@ P = {
     "baseline_explain": "In a moment, you'll breathe out gently, and hold for as long as is comfortable, up to twenty seconds, "
                         "while you keep walking. I'll count the seconds. When you need to breathe, tap stop on your screen, "
                         "or tap your earbuds, and breathe.",
+    "retest_explain": "In a moment, you'll breathe out gently, and hold for as long as is comfortable, up to forty seconds, "
+                      "while you keep walking. I'll count the seconds. When you need to breathe, tap stop on your screen, "
+                      "or tap your earbuds, and breathe.",
     "test_cap": "Twenty seconds. Great hold. Breathe now.",
+    "test_cap_40": "Forty seconds. Incredible hold. Breathe now.",
     "baseline_done": "Good. Breathe normally, nice and easy.",
     "last_done": "That's the last hold. Great work today.",
     "cooldown": "Keep walking easy, breathing through your nose. Let your heart rate come down.",
@@ -56,7 +60,7 @@ P = {
 }
 for i in range(1, 13):
     P[f"round_{i}"] = f"Round {words(i)}."
-for n in range(1, 21):
+for n in range(1, 41):
     P[f"n_{n}"] = words(n).capitalize() + "."
 for n in range(5, 181, 5):
     P[f"count_{n}"] = words(n).capitalize() + "."
