@@ -2,6 +2,7 @@ import { PRESETS, KIND_LABEL, sessionCount, sessionKind, trainingParams, latestT
 import { buildSession, testMax } from './script.js';
 import { renderSession, renderRest } from './audio.js';
 import { buildRest, REST_LENGTHS } from './rest.js';
+import { buildStrength, STRENGTH_PRESETS, PER_WEEK, strengthCount } from './strength.js';
 import { landscape, timeMood, icon } from './art.js';
 
 const KEY = 'altitude.v1';
@@ -20,6 +21,8 @@ const defaults = () => ({
   settings: { music: 0.8, voice: 1 },
   pending: null,
   rest: [],
+  strength: null,
+  strengthArchive: [],
 });
 
 function load() {
@@ -45,10 +48,12 @@ const fmtTime = (s) => { s = Math.max(0, Math.round(s)); return `${Math.floor(s 
 const minutes = (s) => Math.max(1, Math.round(s / 60));
 const isTestKind = (k) => k === 'baseline' || k === 'retest';
 
+// Every streak-counting session: the climb and diaphragm strength (deep rest is separate).
 function allResults() {
   const r = [];
-  for (const p of state.archive) r.push(...p.results);
+  for (const p of [...state.archive, ...state.strengthArchive]) r.push(...p.results);
   if (state.program) r.push(...state.program.results);
+  if (state.strength) r.push(...state.strength.results);
   return r;
 }
 
@@ -169,12 +174,14 @@ function view() {
   if (tab === 'progress') return progress();
   if (tab === 'settings') return settings();
   if (tab === 'rest') return restTab();
+  if (tab === 'strength') return strengthTab();
   return home();
 }
 
 tabs.innerHTML = [
   ['today', 'peak', 'Today'],
   ['rest', 'moon', 'Rest'],
+  ['strength', 'lungs', 'Strength'],
   ['progress', 'chart', 'Progress'],
   ['settings', 'settings', 'Settings'],
 ].map(([t, ic, l]) => `<button data-tab="${t}" class="tab" aria-label="${l}">${icon(ic, 22)}<span>${l}</span></button>`).join('');
@@ -475,13 +482,19 @@ function calendar() {
 }
 
 function history() {
-  // Climb sessions and deep-rest sessions, newest day first.
-  const res = [...state.program.results.map((r, k) => ({ ...r, o: k })), ...state.rest.map((r, k) => ({ ...r, kind: 'rest', o: 1000 + k }))]
+  // Climb, deep-rest and strength sessions, newest day first.
+  const res = [
+    ...state.program.results.map((r, k) => ({ ...r, o: k })),
+    ...state.rest.map((r, k) => ({ ...r, kind: 'rest', o: 1000 + k })),
+    ...(state.strength?.results || []).map((r, k) => ({ ...r, o: 2000 + k })),
+  ]
     .sort((a, b) => (a.date === b.date ? b.o - a.o : a.date < b.date ? 1 : -1));
   if (!res.length) return '<p style="margin:0">Your sessions will appear here.</p>';
   const rate = { easy: 'Felt easy', right: 'Just right', hard: 'Felt hard' };
   const day = (r) => parseDay(r.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-  return `<ul class="hist">${res.map((r) => r.kind === 'rest' ? `<li>${icon('moon', 20)}
+  return `<ul class="hist">${res.map((r) => r.kind === 'strength' ? `<li>${icon('lungs', 20)}
+      <div class="main"><b>Strength \u00B7 Session ${r.i + 1}</b><span>${day(r)}${r.rating ? ' \u00B7 ' + rate[r.rating] : ''}</span></div>
+      <div class="val">${r.exhale}s<span>longest exhale</span></div></li>` : r.kind === 'rest' ? `<li>${icon('moon', 20)}
       <div class="main"><b>Deep rest</b><span>${day(r)}</span></div>
       <div class="val">${r.minutes}<span>minutes</span></div></li>` : `<li>${icon(KIND_ICON[r.kind], 20)}
       <div class="main"><b>Day ${r.i + 1} · ${KIND_LABEL[r.kind]}</b><span>${parseDay(r.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}${r.rating ? ' · ' + rate[r.rating] : ''}</span></div>
@@ -647,8 +660,8 @@ function setupMediaSession() {
   const s = current.session;
   const ms = navigator.mediaSession;
   ms.metadata = new MediaMetadata({
-    title: current.rest ? 'Altitude · Deep rest' : `Altitude · Day ${current.i + 1}`,
-    artist: current.rest ? `${s.minutes} minutes` : KIND_LABEL[s.kind],
+    title: current.rest ? 'Altitude · Deep rest' : current.strength ? 'Altitude · Diaphragm strength' : `Altitude · Day ${current.i + 1}`,
+    artist: current.rest ? `${s.minutes} minutes` : current.strength ? `Session ${current.i + 1}` : KIND_LABEL[s.kind],
     album: 'Altitude breath training',
     artwork: [{ src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' }],
   });
@@ -695,6 +708,7 @@ const ease = (k) => 0.5 - 0.5 * Math.cos(Math.PI * Math.min(1, Math.max(0, k)));
 function tick() {
   if (!current || overlay.hidden) return;
   if (current.rest) return restTick();
+  if (current.strength) return strengthTick();
   const s = current.session;
   const t = audio.currentTime || 0;
   const ph = phaseAt(s.phases, t) || { type: 'walk', label: t > s.duration - 8 ? 'Complete' : 'Walk', start: t, end: t + 1 };
@@ -762,7 +776,8 @@ function tick() {
 
 audio.addEventListener('timeupdate', () => {
   if (current?.rest && audio.currentTime > current.session.duration - 12) logRest();
-  if (!current || current.practice || current.rest || !current.session) return;
+  if (current?.strength && audio.currentTime > current.session.duration - 10) logStrength();
+  if (!current || current.practice || current.rest || current.strength || !current.session) return;
   if (audio.currentTime > current.session.duration - 15 && !state.pending) {
     state.pending = pendingRecord();
     save();
@@ -771,6 +786,7 @@ audio.addEventListener('timeupdate', () => {
 
 audio.addEventListener('ended', () => {
   if (current?.rest) restDone();
+  else if (current?.strength) strengthDone();
   else if (current && current.session) finishScreen();
 });
 
@@ -789,6 +805,7 @@ function pendingRecord() {
 
 async function endEarly() {
   if (current.rest) return endRest();
+  if (current.strength) return endStrength();
   const s = current.session;
   const nearlyDone = audio.currentTime > s.duration * 0.85 || (s.test && audio.currentTime > s.test.resume);
   if (nearlyDone && !current.practice) {
@@ -918,6 +935,345 @@ function closePlayer() {
   overlay.innerHTML = '';
   document.body.style.overflow = '';
   view();
+}
+
+// ---------- Diaphragm strength ----------
+
+const STRENGTH_INFO = [
+  ['wind', 'Belly breathing', 'Breathe so only the belly rises. The foundation for the rest.'],
+  ['lungs', 'Sniff breathing', 'Three quick sniffs to fill deeply, then a slow exhale.'],
+  ['flame', 'Power exhales', 'Short, sharp bursts from the belly, one on each beat.'],
+  ['up', 'Long exhales', 'A ladder of slow exhales that grows over the weeks.'],
+];
+
+function strengthTab() {
+  setBackdrop('breathe', false, 0.6);
+  const sp = state.strength;
+  const s = streak();
+  const info = `<div class="glass rise d4"><div class="eyebrow" style="margin-bottom:14px">The exercises</div><ul class="list">
+    ${STRENGTH_INFO.map(([ic, t, d]) => `<li>${icon(ic, 22)}<div><b>${t}</b><span>${d}</span></div></li>`).join('')}</ul></div>`;
+  const safety = `<div class="glass rise d4"><div class="eyebrow">Safety</div><p style="margin:10px 0 0">Stop if you feel dizzy or lightheaded, especially during power exhales. Skip power exhales if you are pregnant or have high blood pressure, a heart condition, a hernia or recent abdominal surgery.</p></div>`;
+  const head = `
+    <div class="top"><div class="wordmark">Altitude</div><div class="streak" title="Day streak">${icon('flame', 16)}<span class="num">${s}</span></div></div>
+    <div class="greet rise">
+      <div class="date">Diaphragm training</div>
+      <h1>Strength</h1>
+      <p style="max-width:330px;margin-bottom:0">Five minutes, lying down or seated. Breath-only exercises for a stronger, more efficient diaphragm.</p>
+    </div>
+    <div style="height:max(16px, calc(100vh - 780px))"></div>`;
+
+  if (!sp) {
+    let sel = state.settings.strengthWeeks || 4;
+    app.innerHTML = `${head}
+      ${STRENGTH_PRESETS.map((p, k) => `<button class="glass choice str-len rise d${k + 1}${p.weeks === sel ? ' sel' : ''}" data-w="${p.weeks}">
+          ${icon('lungs', 22)}
+          <div class="t"><b>${p.title}</b><span>${p.blurb}</span></div>
+          <div class="elev"><b class="num">${strengthCount(p.weeks)}</b>sessions</div></button>`).join('')}
+      <button class="pill rise d3" id="sstart" style="margin:6px 0 14px">Start strength program</button>
+      <p class="rise d3" style="text-align:center;font-size:13px">Aim for five sessions a week. Miss a day and you simply pick up where you left off.</p>
+      ${info}${safety}`;
+    app.querySelectorAll('.str-len').forEach((b) => (b.onclick = () => {
+      sel = Number(b.dataset.w);
+      app.querySelectorAll('.str-len').forEach((c) => c.classList.toggle('sel', c === b));
+    }));
+    app.querySelector('#sstart').onclick = () => {
+      state.settings.strengthWeeks = sel;
+      state.strength = { weeks: sel, n: strengthCount(sel), startedAt: today(), results: [], difficulty: 1, seedBase: Math.floor(Math.random() * 1e6) };
+      save();
+      view();
+    };
+    return;
+  }
+
+  const i = sp.results.length;
+  const doneToday = sp.results.some((r) => r.date === today());
+  const finished = i >= sp.n;
+  const week = Math.min(sp.weeks, Math.floor(Math.min(i, sp.n - 1) / PER_WEEK) + 1);
+  const recent = sp.results.filter((r) => (new Date() - parseDay(r.date)) / 864e5 < 7).length;
+  const longest = Math.max(0, ...sp.results.map((r) => r.exhale || 0));
+  let card;
+  if (finished) {
+    card = `<div class="glass today rise d1"><div class="eyebrow">Program complete</div>
+      <h2>${sp.n} sessions done</h2><p>Your longest exhale reached ${longest} seconds. Start a new program to keep building.</p>
+      <button class="pill" id="snew">Start a new program</button></div>`;
+  } else if (doneToday) {
+    card = `<div class="glass today rise d1"><div class="eyebrow">Today · complete</div>
+      <h2>Nice work. Rest that diaphragm.</h2><p>Session ${i + 1} opens tomorrow.</p>
+      <button class="pill soft" id="sagain">${icon('reset', 18)} Practice again</button></div>`;
+  } else {
+    const sess = strengthSession(i);
+    const p = sess.params;
+    const row = (t, v) => `<div class="srow"><span>${t}</span><b>${v}</b></div>`;
+    card = `<div class="glass today rise d1">
+      <div class="eyebrow">Session ${i + 1} of ${sp.n} · Week ${week}</div>
+      <h2>Diaphragm session</h2>
+      <div class="meta"><span>${icon('clock', 16)}${minutes(sess.duration)} min</span><span>${icon('lungs', 16)}4 exercises</span></div>
+      <div class="splan">
+        ${row('Belly breathing', `${p.bellyBreaths} breaths · out ${p.bellyOut} s`)}
+        ${row('Sniff breathing', `${p.sniffs} rounds`)}
+        ${row('Power exhales', `${p.powerRounds} × ${p.powerReps}`)}
+        ${row('Long exhales', `up to ${p.ladder[p.ladder.length - 1]} s`)}
+      </div>
+      <button class="pill" id="sbegin">${icon('play', 18)} Begin</button></div>`;
+  }
+  app.innerHTML = `${head}
+    ${card}
+    <div class="glass rise d2">
+      <div class="eyebrow">Your progress</div>
+      <div class="statrow" style="margin:16px 0 0">
+        <div style="text-align:left"><b class="num">${Math.min(i, sp.n)}<small style="font-size:15px;color:var(--text3)">/${sp.n}</small></b><span>Sessions</span></div>
+        <div style="padding-left:16px;text-align:left"><b class="num">${recent}<small style="font-size:15px;color:var(--text3)">/${PER_WEEK}</small></b><span>Past 7 days</span></div>
+        <div style="padding-left:16px;text-align:left"><b class="num">${longest ? longest + 's' : '–'}</b><span>Longest exhale</span></div>
+      </div>
+    </div>
+    ${info}${safety}
+    <button class="pill text rise d4" id="sreset">Start a new strength program</button>`;
+  const on = (id, fn) => { const el = app.querySelector('#' + id); if (el) el.onclick = fn; };
+  on('sbegin', () => startStrength(i, false));
+  on('sagain', () => startStrength(i - 1, true));
+  const restart = () => { state.strengthArchive.push(state.strength); state.strength = null; save(); view(); };
+  on('snew', restart);
+  on('sreset', async () => {
+    if (await sheet({ title: 'Start a new strength program?', text: 'Your current program ends here. Your streak and history are kept.', ok: 'Start over', cancel: 'Keep going' })) restart();
+  });
+}
+
+function strengthSession(i) {
+  const sp = state.strength;
+  return buildStrength(clips, { i, n: sp.n, difficulty: sp.difficulty, seed: sp.seedBase + i });
+}
+
+async function startStrength(i, practice) {
+  const session = strengthSession(i);
+  current = { strength: true, i, practice, session, url: null, logged: false };
+  flow(`
+    <div class="bar"><button class="x" id="cancel" aria-label="Cancel">${icon('close', 18)}</button></div>
+    <div class="center">
+      <div class="stage" style="width:180px"><div class="orb breathing"></div></div>
+      <h1 class="rise">Preparing your session</h1>
+      <p class="rise d1">Mixing voice and music.</p>
+      <div class="loadline"><div id="lb"></div></div>
+    </div>`, ['breathe']);
+  let cancelled = false;
+  overlay.querySelector('#cancel').onclick = () => { cancelled = true; closePlayer(); };
+  try {
+    const blob = await renderSession(session, clips, state.settings, (f) => {
+      const lb = overlay.querySelector('#lb');
+      if (lb) lb.style.width = `${Math.round(f * 100)}%`;
+    });
+    if (cancelled) return;
+    current.url = URL.createObjectURL(blob);
+    audio.src = current.url;
+    audio.load();
+    const li = (ic, t) => `<li>${icon(ic, 22)}<div><span style="color:var(--text);font-size:16px">${t}</span></div></li>`;
+    flow(`
+      <div class="bar"><button class="x" id="cancel" aria-label="Cancel">${icon('close', 18)}</button></div>
+      <div class="center">
+        <div class="eyebrow rise">${practice ? 'Practice' : `Session ${i + 1}`} · Diaphragm strength</div>
+        <h1 class="rise d1" style="margin-top:12px">Get comfortable</h1>
+        <div class="glass steps rise d2"><ul class="list">
+          ${li('moon', 'Lie on your back with knees bent, or sit up tall')}
+          ${li('lungs', 'One hand on your chest, one on your belly')}
+          ${li('phone', 'Set your phone where you can see it. The voice leads, the screen counts.')}
+        </ul></div>
+      </div>
+      <div class="foot rise d3"><button class="pill" id="begin">${icon('play', 18)} Begin · ${fmtTime(session.duration)}</button></div>`, ['breathe']);
+    overlay.querySelector('#cancel').onclick = closePlayer;
+    overlay.querySelector('#begin').onclick = beginStrength;
+  } catch (err) {
+    if (cancelled) return;
+    console.error(err);
+    flow(`<div class="center"><h1>Something went wrong</h1><p>${String(err.message || err)}</p></div>
+      <div class="foot"><button class="pill" id="close">Close</button></div>`, ['breathe']);
+    overlay.querySelector('#close').onclick = closePlayer;
+  }
+}
+
+function beginStrength() {
+  const s = current.session;
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch {}
+  audio.currentTime = 0;
+  audio.play().catch((e) => alert('Could not start audio: ' + e.message));
+  setupMediaSession();
+  flow(`
+    <div class="bar"><button class="x" id="end" aria-label="End session">${icon('close', 18)}</button><div class="segs" id="segs">${s.blocks.map(() => '<i><s></s></i>').join('')}</div></div>
+    <div class="center">
+      <div class="eyebrow" id="ex">Get set</div>
+      <div class="plabel" id="plabel" style="margin-top:10px"></div>
+      <div class="stage">
+        <div class="halo h1" id="h1"></div><div class="halo h2" id="h2"></div>
+        <svg class="ring" viewBox="0 0 104 104"><circle class="tr" cx="52" cy="52" r="48"/><circle class="pr" id="ring" cx="52" cy="52" r="48" stroke-dasharray="${RING_C}" stroke-dashoffset="${RING_C}"/></svg>
+        <div class="orb" id="orb"></div>
+      </div>
+      <div class="pcount" id="count"></div>
+      <div class="psub" id="psub"></div>
+    </div>
+    <div class="foot ctrl">
+      <div class="pbar"><div class="track"><div class="fill" id="pb"></div></div><div class="times"><span id="tcur">0:00</span><span id="trem">-${fmtTime(s.duration)}</span></div></div>
+      <button class="pp" id="pp" aria-label="Pause">${icon('pause', 24)}</button>
+    </div>`, ['dusk', 'breathe', 'hold'], 'dusk');
+  overlay.querySelector('#pp').onclick = () => (audio.paused ? audio.play() : audio.pause());
+  overlay.querySelector('#end').onclick = endEarly;
+  cancelAnimationFrame(raf);
+  raf = requestAnimationFrame(tick);
+}
+
+const STEP_WORD = { 'Belly breathing': 'Breath', 'Sniff breathing': 'Round', 'Power exhales': 'Round', 'Long exhales': 'Step' };
+
+function strengthTick() {
+  const s = current.session;
+  const t = audio.currentTime || 0;
+  // In the short gaps between phases, keep showing the one that just ended.
+  let ph = phaseAt(s.phases, t);
+  if (!ph) {
+    const prev = s.phases.filter((p) => p.start <= t).pop();
+    ph = prev ? { ...prev, type: prev.type === 'sniff' ? 'sniff' : 'setup', start: prev.start, end: prev.end } : { type: 'setup', ex: 'Get set', label: '', start: t, end: t + 1 };
+  }
+  const k = Math.min(1, Math.max(0, (t - ph.start) / Math.max(0.01, ph.end - ph.start)));
+  let b = 0.45 + 0.12 * Math.sin((2 * Math.PI * t) / 6), ring = 0, count = '', bg = 'dusk', label = ph.label;
+  const of = ph.reps ? `${STEP_WORD[ph.ex] || 'Set'} ${ph.rep + 1} of ${ph.reps}` : '';
+  let sub = of;
+  switch (ph.type) {
+    case 'inhale':
+      b = ease(k); bg = 'breathe'; ring = k;
+      if (ph.count) count = `${Math.min(ph.count, Math.floor(t - ph.start) + 1)}`;
+      break;
+    case 'exhale':
+      b = 1 - ease(k); bg = 'breathe'; ring = k;
+      if (ph.count && !ph.quiet) count = `${Math.min(ph.count, Math.floor(t - ph.start) + 1)}`;
+      break;
+    case 'sniff':
+      b = 0.15 + 0.85 * ((ph.step + ease(Math.min(1, k * 1.6))) / 3); bg = 'breathe';
+      count = `${ph.step + 1}`;
+      break;
+    case 'power': {
+      let j = 0;
+      while (j < ph.beats.length && ph.beats[j] <= t) j++;
+      const pulse = j ? Math.exp(-(t - ph.beats[j - 1]) / 0.12) : 0;
+      b = 0.2 + 0.35 * pulse; bg = 'hold'; ring = j / ph.reps;
+      count = `${Math.max(0, ph.reps - j)}`;
+      sub = `Round ${ph.rep + 1} of ${ph.rounds} · pushes left`;
+      break;
+    }
+    case 'rest':
+      count = `${Math.max(0, Math.ceil(ph.end - t))}`;
+      sub = 'Breathe normally';
+      break;
+    default:
+      sub = '';
+  }
+  const $ = (id) => overlay.querySelector('#' + id);
+  if (!$('orb')) return;
+  if (bg !== lastBg) {
+    overlay.querySelectorAll('.backdrop .layer').forEach((d) => d.classList.toggle('on', d.dataset.m === bg));
+    lastBg = bg;
+  }
+  $('orb').style.transform = `scale(${(0.7 + 0.42 * b).toFixed(3)})`;
+  $('h1').style.transform = `scale(${(0.86 + 0.14 * b).toFixed(3)})`;
+  $('h2').style.transform = `scale(${(0.8 + 0.22 * b).toFixed(3)})`;
+  $('ring').style.strokeDashoffset = RING_C * (1 - ring);
+  if ($('ex').textContent !== (ph.ex || '')) $('ex').textContent = ph.ex || '';
+  if ($('plabel').textContent !== label) $('plabel').textContent = label;
+  if ($('count').innerHTML !== count) $('count').innerHTML = count;
+  if ($('psub').textContent !== sub) $('psub').textContent = sub;
+  $('pb').style.width = `${Math.min(100, (t / s.duration) * 100)}%`;
+  $('tcur').textContent = fmtTime(t);
+  $('trem').textContent = '-' + fmtTime(s.duration - t);
+  const paused = audio.paused;
+  if ($('pp').dataset.p !== String(paused)) { $('pp').dataset.p = String(paused); $('pp').innerHTML = icon(paused ? 'play' : 'pause', 24); }
+  const segs = $('segs').children;
+  s.blocks.forEach((bl, j) => { segs[j].firstChild.style.width = `${Math.min(100, Math.max(0, ((t - bl.start) / (bl.end - bl.start)) * 100))}%`; });
+  raf = requestAnimationFrame(tick);
+}
+
+function strengthRecord() {
+  const s = current.session;
+  const p = s.params;
+  return {
+    i: current.i,
+    date: today(),
+    kind: 'strength',
+    duration: Math.round(s.duration),
+    power: p.powerRounds * p.powerReps,
+    exhale: p.ladder[p.ladder.length - 1],
+  };
+}
+
+function logStrength() {
+  if (!current?.strength || current.practice || current.logged) return;
+  current.logged = true;
+  const sp = state.strength;
+  if (!sp.results.some((r) => r.i === current.i)) sp.results.push(strengthRecord());
+  save();
+}
+
+function strengthDone() {
+  cancelAnimationFrame(raf);
+  logStrength();
+  const rec = strengthRecord();
+  if (current.practice) {
+    flow(`<div class="center"><div class="eyebrow rise">Practice complete</div><h1 class="rise d1" style="margin-top:12px">Well breathed</h1>
+      <p class="rise d2">Extra sessions don’t change your program, but every one builds strength.</p></div>
+      <div class="foot rise d3"><button class="pill" id="close">Done</button></div>`, ['breathe']);
+    overlay.querySelector('#close').onclick = closePlayer;
+    return;
+  }
+  flow(`<div class="center">
+      <div class="eyebrow rise">Session ${rec.i + 1} complete</div>
+      <h1 class="rise d1" style="margin-top:14px">A stronger breath</h1>
+      <p class="rise d2">Your diaphragm did real work today.</p>
+      <div class="statrow rise d3">
+        <div><b class="num">${rec.power}</b><span>Power exhales</span></div>
+        <div><b class="num">${rec.exhale}s</b><span>Longest exhale</span></div>
+        <div><b class="num">${streak()}</b><span>Day streak</span></div>
+      </div>
+    </div>
+    <div class="foot rise d4"><button class="pill" id="next">Continue</button></div>`, ['breathe'], 'breathe', 31);
+  overlay.querySelector('#next').onclick = () => {
+    let choice = null;
+    const opt = (r, t, d) => `<button class="glass" data-r="${r}"><b>${t}</b><span>${d}</span></button>`;
+    flow(`<div class="center">
+        <h1 class="rise">How did today feel?</h1>
+        <p class="rise d1">Your answer tunes the sessions ahead.</p>
+        <div class="rate rise d2">
+          ${opt('easy', 'Too easy', 'Push a little more')}
+          ${opt('right', 'Just right', 'Keep the plan')}
+          ${opt('hard', 'Too hard', 'Ease off a little')}
+        </div>
+      </div>
+      <div class="foot"><button class="pill" id="save" disabled>Done</button></div>`, ['breathe'], 'breathe', 31);
+    const saveBtn = overlay.querySelector('#save');
+    overlay.querySelectorAll('[data-r]').forEach((b) => (b.onclick = () => {
+      choice = b.dataset.r;
+      overlay.querySelectorAll('[data-r]').forEach((c) => c.classList.toggle('sel', c === b));
+      saveBtn.disabled = false;
+    }));
+    saveBtn.onclick = () => {
+      const sp = state.strength;
+      const r = sp.results.find((x) => x.i === rec.i);
+      if (r) r.rating = choice;
+      sp.difficulty = adjustDifficulty(sp.difficulty, choice);
+      save();
+      closePlayer();
+    };
+  };
+}
+
+async function endStrength() {
+  const s = current.session;
+  if (!current.practice && audio.currentTime > s.duration * 0.85) {
+    if (await sheet({ title: 'Finish here?', text: 'You’re nearly done, so this session will count.', ok: 'Finish session', cancel: 'Keep going' })) {
+      audio.pause();
+      strengthDone();
+    }
+    return;
+  }
+  const ok = await sheet({
+    title: 'End this session?',
+    text: current.practice ? 'This was a practice session, so nothing changes.' : 'It won’t count toward your program. You can begin again any time today.',
+    ok: 'End session', cancel: 'Keep going', tone: 'warn',
+  });
+  if (ok) closePlayer();
 }
 
 // ---------- Deep rest (NSDR) ----------

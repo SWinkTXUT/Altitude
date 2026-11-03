@@ -109,6 +109,29 @@ REST = {
 }
 P.update(REST)
 
+# Diaphragm strength sessions (lying down or seated), normal pace.
+STRENGTH = {
+    "str_welcome": "Welcome to diaphragm training. Lie on your back with your knees bent, or sit up tall. "
+                   "Rest one hand on your chest, and one on your belly.",
+    "str_belly_intro": "First, belly breathing. Breathe in through your nose, and let your belly rise into your hand. "
+                       "Keep your chest still.",
+    "str_in": "Breathe in.",
+    "str_out": "And out.",
+    "str_sniff_intro": "Next, sniff breathing. Take three quick sniffs in through your nose, filling a little deeper each time. "
+                       "Then breathe out slowly.",
+    "str_sniff": "Sniff.",
+    "str_slow_out": "And slowly out.",
+    "str_power_intro": "Now, power exhales. Push the air out in short, sharp bursts from your belly, one on each beat. "
+                       "Let the inhale happen on its own. Stop if you feel lightheaded.",
+    "str_go": "Go.",
+    "str_power_rest": "And relax. Breathe normally.",
+    "str_ladder_intro": "Finally, long exhales. Breathe in for four, then breathe out slowly while I count. "
+                        "Each exhale gets a little longer.",
+    "str_close": "Great work. Breathe normally. Your diaphragm is getting stronger.",
+    "str_complete": "Session complete.",
+}
+P.update(STRENGTH)
+
 for i in range(1, 13):
     P[f"round_{i}"] = f"Round {words(i)}."
 for n in range(1, 41):

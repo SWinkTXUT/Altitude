@@ -56,7 +56,14 @@ export function makeKit() {
       d[i] = h2 * 0.35 * Math.exp(-(i / SR) / decay);
     }
   });
-  return { kick, clap, hat: hat(0.018, 0.12), ohat: hat(0.09, 0.35) };
+  // Soft wooden tick marking each power exhale in strength sessions.
+  const tick = samples(0.09, (d, n) => {
+    for (let i = 0; i < n; i++) {
+      const t = i / SR;
+      d[i] = (Math.sin(2 * Math.PI * 1650 * t) * 0.7 + Math.sin(2 * Math.PI * 2480 * t) * 0.3) * Math.exp(-t / 0.018) * 0.6;
+    }
+  });
+  return { kick, clap, hat: hat(0.018, 0.12), ohat: hat(0.09, 0.35), tick };
 }
 
 function impulse(seconds) {
@@ -436,6 +443,7 @@ export async function renderSession(session, durations, settings, onProgress = (
   onProgress(0.2);
   kitCache = kitCache || makeKit();
   const mp = musicPlan(session.plan.seed);
+  if (session.bpm) mp.bpm = session.bpm;
   const inst = await makeInstruments(mp);
   onProgress(0.45);
   await yieldFrame();
@@ -453,6 +461,7 @@ export async function renderSession(session, durations, settings, onProgress = (
   onProgress(0.8);
   await yieldFrame();
 
+  for (const c of session.clicks || []) add(x, kitCache.tick, c, 0.55);
   for (const v of session.voice) add(x, voice[v.key], v.t, settings.voice);
   limit(x);
   onProgress(0.95);
